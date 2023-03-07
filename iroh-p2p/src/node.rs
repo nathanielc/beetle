@@ -1218,6 +1218,7 @@ mod tests {
                 ..Default::default()
             };
 
+
             if let Some(keys) = self.keys {
                 if let Some(kad) = p2p.swarm.behaviour_mut().kad.as_mut() {
                     for k in keys {
