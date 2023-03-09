@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use iroh_one::mem_p2p;
-use iroh_p2p::{Config as P2pConfig, Libp2pConfig};
+use iroh_p2p::{Config as P2pConfig, Libp2pConfig, PeerId};
 use iroh_rpc_types::p2p::P2pAddr;
 use iroh_rpc_types::store::StoreAddr;
 use iroh_rpc_types::Addr;
@@ -22,6 +22,7 @@ use tokio::task::JoinHandle;
 pub struct P2pService {
     task: JoinHandle<()>,
     addr: P2pAddr,
+    peer_id: PeerId,
 }
 
 impl P2pService {
@@ -47,8 +48,15 @@ impl P2pService {
         config.rpc_client.store_addr = Some(store_service);
         config.libp2p = libp2p_config;
         config.key_store_path = key_store_path;
-        let task = mem_p2p::start(addr.clone(), config).await?;
-        Ok(Self { task, addr })
+        let (peer_id, task) = mem_p2p::start(addr.clone(), config).await?;
+        Ok(Self {
+            task,
+            addr,
+            peer_id,
+        })
+    }
+    pub fn local_peer_id(&self) -> PeerId {
+        self.peer_id
     }
 
     /// Returns the internal RPC address of this p2p service.

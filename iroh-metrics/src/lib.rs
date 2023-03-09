@@ -35,6 +35,7 @@ use opentelemetry::{
     trace::{TraceContextExt, TraceId},
 };
 use opentelemetry_otlp::WithExportConfig;
+use prometheus_client::registry::Registry;
 use std::env::consts::{ARCH, OS};
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -61,6 +62,13 @@ impl MetricsHandle {
         init_tracer(cfg.clone())?;
         let metrics_task = init_metrics(cfg).await;
         Ok(MetricsHandle { metrics_task })
+    }
+
+    pub fn register<T, F>(f: F) -> T
+    where
+        F: FnOnce(&mut Registry) -> T,
+    {
+        CORE.register(f)
     }
 }
 
