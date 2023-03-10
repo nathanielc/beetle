@@ -816,9 +816,19 @@ impl<T: ContentLoader> Resolver<T> {
                 self.resolve_dag_pb_or_unixfs(path, root_cid, loaded_cid, ctx)
                     .await
             }
-            Codec::DagCbor | Codec::DagJson | Codec::Raw => {
-                self.resolve_ipld(path, root_cid, loaded_cid, ctx).await
+            Codec::DagCbor => {
+                self.resolve_ipld(IpldCodec::DagCbor, path, root_cid, loaded_cid, ctx)
+                    .await
             }
+            Codec::DagJson => {
+                self.resolve_ipld(IpldCodec::DagJson, path, root_cid, loaded_cid, ctx)
+                    .await
+            }
+            Codec::Raw => {
+                self.resolve_ipld(IpldCodec::Raw, path, root_cid, loaded_cid, ctx)
+                    .await
+            }
+
             _ => bail!("unsupported codec {:?}", codec),
         }
     }
@@ -908,20 +918,22 @@ impl<T: ContentLoader> Resolver<T> {
                 content: OutContent::Unixfs(current),
             })
         } else {
-            self.resolve_ipld(root_path, cid, loaded_cid, ctx).await
+            let codec: libipld::IpldCodec = cid.codec().try_into()?;
+            self.resolve_ipld(codec, root_path, cid, loaded_cid, ctx)
+                .await
         }
     }
 
     #[tracing::instrument(skip(self, loaded_cid))]
     async fn resolve_ipld(
         &self,
+        codec: IpldCodec,
         root_path: Path,
         cid: Cid,
         loaded_cid: LoadedCid,
         mut ctx: LoaderContext,
     ) -> Result<Out> {
         trace!("{:?} resolving {} for {}", ctx.id(), cid, root_path);
-        let codec: libipld::IpldCodec = cid.codec().try_into()?;
         let ipld: libipld::Ipld = codec
             .decode(&loaded_cid.data)
             .map_err(|e| anyhow!("invalid {:?}: {:?}", codec, e))?;

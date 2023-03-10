@@ -6,6 +6,7 @@ use crate::config::{Config, CONFIG_FILE_NAME, ENV_PREFIX};
 use crate::IpfsPath;
 use crate::P2pApi;
 use anyhow::{ensure, Context, Result};
+use bytes::Bytes;
 use cid::Cid;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
@@ -180,6 +181,20 @@ impl Api {
         };
 
         Ok(stream.boxed())
+    }
+
+    /// Returns the bytes ignoring the codec specified in the CID.
+    pub async fn get_raw(&self, cid: Cid) -> Result<Bytes> {
+        tracing::debug!("get_raw {:?}", cid);
+        let ipfs_path = IpfsPath::from_cid(cid);
+        let resolver = self.resolver.clone();
+        let out = resolver.resolve_raw(ipfs_path).await?;
+
+        let mut reader = out.pretty(resolver.clone(), Default::default(), None)?;
+        let mut bytes: Vec<u8> = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+
+        Ok(bytes.into())
     }
 
     pub async fn check(&self) -> ClientStatus {
