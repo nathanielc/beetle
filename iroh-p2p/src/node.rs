@@ -9,7 +9,6 @@ use futures_util::stream::StreamExt;
 use iroh_metrics::{core::MRecorder, inc, libp2p_metrics, p2p::P2PMetrics};
 use iroh_rpc_client::Client as RpcClient;
 use iroh_rpc_types::p2p::P2pAddr;
-use libp2p::core::Multiaddr;
 pub use libp2p::gossipsub::{IdentTopic, Topic};
 use libp2p::identify::{Event as IdentifyEvent, Info as IdentifyInfo};
 use libp2p::identity::Keypair;
@@ -24,6 +23,7 @@ use libp2p::multiaddr::Protocol;
 use libp2p::ping::Result as PingResult;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, SwarmEvent};
+use libp2p::{core::Multiaddr, swarm::AddressScore};
 use libp2p::{PeerId, Swarm};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot::{self, Sender as OneShotSender};
@@ -136,6 +136,10 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
 
         let keypair = load_identity(&mut keychain).await?;
         let mut swarm = build_swarm(&libp2p_config, &keypair, rpc_client.clone()).await?;
+
+        for addr in &libp2p_config.external_multiaddrs {
+            swarm.add_external_address(addr.clone(), AddressScore::Infinite);
+        }
 
         let mut listen_addrs = vec![];
         for addr in &libp2p_config.listening_multiaddrs {
@@ -1217,7 +1221,6 @@ mod tests {
                 channels: Some(1),
                 ..Default::default()
             };
-
 
             if let Some(keys) = self.keys {
                 if let Some(kad) = p2p.swarm.behaviour_mut().kad.as_mut() {

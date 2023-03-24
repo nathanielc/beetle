@@ -73,6 +73,8 @@ impl Source for ServerConfig {
 #[derive(PartialEq, Eq, Debug, Clone, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct Libp2pConfig {
+    /// External address.
+    pub external_multiaddrs: Vec<Multiaddr>,
     /// Local address.
     pub listening_multiaddrs: Vec<Multiaddr>,
     /// Bootstrap peer list.
@@ -210,6 +212,7 @@ impl Default for Libp2pConfig {
             .collect();
 
         Self {
+            external_multiaddrs: vec![],
             listening_multiaddrs: vec![
                 "/ip4/0.0.0.0/tcp/4444".parse().unwrap(),
                 "/ip4/0.0.0.0/udp/4445/quic-v1".parse().unwrap(),
