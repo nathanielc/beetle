@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::AtomicBool,
+};
+use std::{fmt, sync::Arc};
+use std::{sync::atomic::Ordering, time::Duration};
 
 use ahash::AHashMap;
 use anyhow::{anyhow, bail, Context, Result};
@@ -60,7 +63,7 @@ pub struct Node<KeyStorage: Storage> {
     lookup_queries: AHashMap<PeerId, Vec<oneshot::Sender<Result<IdentifyInfo>>>>,
     // TODO(ramfox): use new providers queue instead
     find_on_dht_queries: AHashMap<Vec<u8>, DHTQuery>,
-    network_events: Vec<Sender<NetworkEvent>>,
+    network_events: Vec<(Arc<AtomicBool>, Sender<NetworkEvent>)>,
     #[allow(dead_code)]
     rpc_client: RpcClient,
     _keychain: Keychain<KeyStorage>,
@@ -316,7 +319,8 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
     #[tracing::instrument(skip(self))]
     pub fn network_events(&mut self) -> Receiver<NetworkEvent> {
         let (s, r) = channel(512);
-        self.network_events.push(s);
+        self.network_events
+            .push((Arc::new(AtomicBool::new(true)), s));
         r
     }
 
@@ -454,14 +458,24 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
 
     #[tracing::instrument(skip(self))]
     fn emit_network_event(&mut self, ev: NetworkEvent) {
-        for sender in &mut self.network_events {
+        let mut to_remove = Vec::new();
+        for (i, (open, sender)) in self.network_events.iter_mut().enumerate() {
+            if !open.load(Ordering::Relaxed) {
+                to_remove.push(i);
+                continue;
+            }
             let ev = ev.clone();
             let sender = sender.clone();
+            let open = open.clone();
             tokio::task::spawn(async move {
-                if let Err(e) = sender.send(ev.clone()).await {
-                    warn!("failed to send network event: {:?}", e);
+                if let Err(_e) = sender.send(ev.clone()).await {
+                    // Mark sender as closed so we stop sending events to it
+                    open.store(false, Ordering::Relaxed);
                 }
             });
+        }
+        for idx in to_remove.iter().rev() {
+            self.network_events.swap_remove(*idx);
         }
     }
 
@@ -792,7 +806,9 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
                 ProviderRequestKey::Dht(key) => {
                     debug!("fetching providers for: {:?}", key);
                     if self.swarm.behaviour().kad.is_enabled() {
-                        self.providers.push(key, limit, response_channel);
+                        if !self.providers.push(key.clone(), limit, response_channel) {
+                            warn!("provider query dropped because the queue is full {:?}", key);
+                        }
                     } else {
                         tokio::task::spawn(async move {
                             response_channel
