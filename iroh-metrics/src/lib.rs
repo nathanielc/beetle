@@ -70,6 +70,10 @@ impl MetricsHandle {
     {
         CORE.register(f)
     }
+
+    pub fn encode() -> Vec<u8> {
+        CORE.encode()
+    }
 }
 
 /// Initialize the metrics subsystem.
@@ -115,6 +119,7 @@ fn init_tracer(cfg: Config) -> Result<(), Box<dyn std::error::Error>> {
 
     let log_subscriber = fmt::layer()
         .pretty()
+        .with_ansi(false)
         .with_filter(EnvFilter::from_default_env());
 
     let opentelemetry_subscriber = if cfg.tracing {
