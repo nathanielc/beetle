@@ -13,6 +13,14 @@ use crate::{RpcResult, VersionRequest, VersionResponse, WatchRequest, WatchRespo
 
 pub type StoreAddr = super::addr::Addr<StoreService>;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ListRequest {}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ListResponse {
+    pub data: Vec<Cid>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct PutRequest {
     pub cid: Cid,
@@ -79,6 +87,7 @@ pub struct GetSizeResponse {
 pub enum StoreRequest {
     Watch(WatchRequest),
     Version(VersionRequest),
+    List(ListRequest),
     Put(PutRequest),
     PutMany(PutManyRequest),
     Get(GetRequest),
@@ -91,6 +100,7 @@ pub enum StoreRequest {
 pub enum StoreResponse {
     Watch(WatchResponse),
     Version(VersionResponse),
+    List(RpcResult<ListResponse>),
     Get(RpcResult<GetResponse>),
     Has(RpcResult<HasResponse>),
     GetLinks(RpcResult<GetLinksResponse>),
@@ -120,6 +130,9 @@ impl RpcMsg<StoreService> for VersionRequest {
     type Response = VersionResponse;
 }
 
+impl RpcMsg<StoreService> for ListRequest {
+    type Response = RpcResult<ListResponse>;
+}
 impl RpcMsg<StoreService> for GetRequest {
     type Response = RpcResult<GetResponse>;
 }

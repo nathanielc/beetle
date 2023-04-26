@@ -6,6 +6,7 @@ use libp2p::{
     PeerId,
 };
 use tokio::sync::mpsc;
+use tracing::debug;
 
 type ResponseChannel = mpsc::Sender<Result<HashSet<PeerId>, String>>;
 
@@ -49,6 +50,7 @@ impl Providers {
 
     /// Drops queries if the queue is full.
     pub fn push(&mut self, key: Key, limit: usize, response_channel: ResponseChannel) -> bool {
+        debug!("new key query {:?}", key);
         // Check if we already have a query running
         if let Some(running_query) = self.current_queries.get_mut(&key) {
             // send all found providers
@@ -61,6 +63,7 @@ impl Providers {
             if !providers.is_empty() {
                 let channel = response_channel.clone();
                 tokio::task::spawn(async move {
+                    debug!("sending providers {:?}", providers);
                     let _ = channel.send(Ok(providers)).await;
                 });
             }
@@ -130,6 +133,7 @@ impl Providers {
             if !new_providers.is_empty() {
                 let queries = query.queries.clone();
                 let np = new_providers.clone();
+                debug!("sending new providers {:?}", np);
                 tokio::task::spawn(async move {
                     for query in queries {
                         let _ = query.response_channel.send(Ok(np.clone())).await;
@@ -198,6 +202,7 @@ impl Providers {
 
             tokio::task::spawn(async move {
                 for q in query.queries {
+                    debug!("sending timeout");
                     let _ = q.response_channel.send(Err("timeout".to_string())).await;
                 }
             });

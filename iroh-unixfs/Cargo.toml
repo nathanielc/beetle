@@ -20,7 +20,7 @@ cid.workspace = true
 config.workspace = true
 fastmurmur3.workspace = true
 futures.workspace = true
-iroh-metrics = { workspace = true, features = ["resolver", "gateway"] }
+iroh-metrics = { workspace = true, features = ["resolver"] }
 iroh-rpc-client.workspace = true
 iroh-util.workspace = true
 libipld.workspace = true
@@ -45,7 +45,12 @@ iroh-rpc-types.workspace = true
 iroh-store.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread", "fs"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "fs",
+] }
 
 [build-dependencies]
 prost-build.workspace = true

@@ -80,34 +80,36 @@ impl MetricsHandle {
 async fn init_metrics(cfg: Config) -> Option<JoinHandle<()>> {
     if cfg.collect {
         CORE.set_enabled(true);
-        let prom_gateway_uri = format!(
-            "{}/metrics/job/{}/instance/{}",
-            cfg.prom_gateway_endpoint, cfg.service_name, cfg.instance_id
-        );
-        let push_client = reqwest::Client::new();
-        return Some(tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                let buff = CORE.encode();
-                let res = match push_client.post(&prom_gateway_uri).body(buff).send().await {
-                    Ok(res) => res,
-                    Err(e) => {
-                        warn!("failed to push metrics: {}", e);
-                        continue;
-                    }
-                };
-                match res.status() {
-                    reqwest::StatusCode::OK => {
-                        debug!("pushed metrics to gateway");
-                    }
-                    _ => {
-                        warn!("failed to push metrics to gateway: {:?}", res);
-                        let body = res.text().await.unwrap();
-                        warn!("error body: {}", body);
+        if cfg.export {
+            let prom_gateway_uri = format!(
+                "{}/metrics/job/{}/instance/{}",
+                cfg.prom_gateway_endpoint, cfg.service_name, cfg.instance_id
+            );
+            let push_client = reqwest::Client::new();
+            return Some(tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    let buff = CORE.encode();
+                    let res = match push_client.post(&prom_gateway_uri).body(buff).send().await {
+                        Ok(res) => res,
+                        Err(e) => {
+                            warn!("failed to push metrics: {}", e);
+                            continue;
+                        }
+                    };
+                    match res.status() {
+                        reqwest::StatusCode::OK => {
+                            debug!("pushed metrics to gateway");
+                        }
+                        _ => {
+                            warn!("failed to push metrics to gateway: {:?}", res);
+                            let body = res.text().await.unwrap();
+                            warn!("error body: {}", body);
+                        }
                     }
                 }
-            }
-        }));
+            }));
+        }
     }
     None
 }

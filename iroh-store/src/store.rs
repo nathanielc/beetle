@@ -206,6 +206,11 @@ impl Store {
     }
 
     #[tracing::instrument(skip(self))]
+    pub fn list(&self) -> Result<Vec<Cid>> {
+        self.read_store()?.list()
+    }
+
+    #[tracing::instrument(skip(self))]
     pub fn get(&self, cid: &Cid) -> Result<Option<DBPinnableSlice<'_>>> {
         self.read_store()?.get(cid)
     }
@@ -476,6 +481,18 @@ impl<'a> WriteStore<'a> {
 }
 
 impl<'a> ReadStore<'a> {
+    fn list(&self) -> Result<Vec<Cid>> {
+        self.db
+            .iterator_cf(self.cf.metadata, IteratorMode::Start)
+            .map(|meta| -> Result<cid::CidGeneric<64>> {
+                let (_key, data) = meta?;
+                let meta = rkyv::check_archived_root::<MetadataV0>(&data)
+                    .map_err(|e| anyhow!("{:?}", e))?;
+                let multihash = cid::multihash::Multihash::from_bytes(&meta.multihash)?;
+                Ok(Cid::new_v1(meta.codec, multihash))
+            })
+            .collect::<Result<Vec<Cid>>>()
+    }
     fn get(&self, cid: &Cid) -> Result<Option<DBPinnableSlice<'a>>> {
         inc!(StoreMetrics::GetRequests);
         let start = std::time::Instant::now();

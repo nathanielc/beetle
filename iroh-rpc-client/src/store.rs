@@ -25,6 +25,12 @@ impl StoreClient {
         Ok(res.version)
     }
 
+    #[tracing::instrument(skip(self))]
+    pub async fn list(&self) -> Result<Vec<Cid>> {
+        let res = self.client.rpc(ListRequest {}).await??;
+        Ok(res.data)
+    }
+
     #[tracing::instrument(skip(self, blob))]
     pub async fn put(&self, cid: Cid, blob: Bytes, links: Vec<Cid>) -> Result<()> {
         self.client.rpc(PutRequest { cid, blob, links }).await??;

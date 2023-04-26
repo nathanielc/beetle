@@ -8,10 +8,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-exclude = [
-  "tests/**",
-  "fixtures/**",
-]
+exclude = ["tests/**", "fixtures/**"]
 
 [dependencies]
 anyhow.workspace = true
@@ -22,7 +19,7 @@ bs58.workspace = true
 bytes.workspace = true
 cid.workspace = true
 futures.workspace = true
-iroh-metrics = { workspace = true, features = ["resolver", "gateway"] }
+iroh-metrics = { workspace = true, features = ["resolver"] }
 iroh-rpc-client.workspace = true
 iroh-util.workspace = true
 iroh-unixfs.workspace = true
@@ -31,7 +28,11 @@ libp2p.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["fs"] }
 tracing.workspace = true
-trust-dns-resolver = { workspace = true, features = ["dns-over-https-rustls", "serde-config", "tokio-runtime"] }
+trust-dns-resolver = { workspace = true, features = [
+    "dns-over-https-rustls",
+    "serde-config",
+    "tokio-runtime",
+] }
 fnv.workspace = true
 
 [dev-dependencies]
@@ -42,5 +43,10 @@ proptest.workspace = true
 rand.workspace = true
 async-recursion.workspace = true
 rand_chacha.workspace = true
-tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread", "fs"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "fs",
+] }
 ruzstd.workspace = true

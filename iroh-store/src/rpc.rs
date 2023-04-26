@@ -7,8 +7,8 @@ use iroh_rpc_client::{create_server, ServerError, ServerSocket, StoreServer, HEA
 use iroh_rpc_types::{
     store::{
         GetLinksRequest, GetLinksResponse, GetRequest, GetResponse, GetSizeRequest,
-        GetSizeResponse, HasRequest, HasResponse, PutManyRequest, PutRequest, StoreAddr,
-        StoreRequest, StoreService,
+        GetSizeResponse, HasRequest, HasResponse, ListRequest, ListResponse, PutManyRequest,
+        PutRequest, StoreAddr, StoreRequest, StoreService,
     },
     VersionRequest, VersionResponse, WatchRequest, WatchResponse,
 };
@@ -68,6 +68,13 @@ impl RpcStore {
     }
 
     #[tracing::instrument(skip(self))]
+    async fn list(self, _req: ListRequest) -> Result<ListResponse> {
+        self.0
+            .spawn_blocking(move |x| Ok(ListResponse { data: x.list()? }))
+            .await
+    }
+
+    #[tracing::instrument(skip(self))]
     async fn get(self, req: GetRequest) -> Result<GetResponse> {
         let cid = req.cid;
         self.0
@@ -117,13 +124,14 @@ impl RpcStore {
     }
 }
 
-/// dispatch a single request from the server 
+/// dispatch a single request from the server
 #[rustfmt::skip]
 async fn dispatch(s: StoreServer, req: StoreRequest, chan: ServerSocket<StoreService>, target: RpcStore) -> result::Result<(), ServerError> {
     use StoreRequest::*;
     match req {
         Watch(req) => s.server_streaming(req, chan, target, RpcStore::watch).await,
         Version(req) => s.rpc(req, chan, target, RpcStore::version).await,
+        List(req) => s.rpc_map_err(req, chan, target, RpcStore::list).await,
         Put(req) => s.rpc_map_err(req, chan, target, RpcStore::put).await,
         PutMany(req) => s.rpc_map_err(req, chan, target, RpcStore::put_many).await,
         Get(req) => s.rpc_map_err(req, chan, target, RpcStore::get).await,
