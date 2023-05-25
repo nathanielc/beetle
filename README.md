@@ -1,3 +1,5 @@
+> This fork is not compatible with upstream beetle. It has been reduced to the minimum crates needed to embed into [rust-ceramic](https://github.com/3box/rust-ceramic).
+
 # iroh
 
 [![crates.io](https://img.shields.io/crates/v/iroh.svg?style=flat-square)](https://crates.io/crates/iroh)
@@ -27,6 +29,8 @@ A full suite of automated benchmarks is in the works. [this talk](https://www.yo
 ## Who's behind this?
 
 [Iroh](https://iroh.computer) is built & maintained by [number 0](https://n0.computer). We're a founder-backed startup hell-bent on building efficient distributed systems software.
+
+This fork is maintained by [3Box Labs creators of the Ceramic network](https://ceramic.network/).
 
 ## License
 

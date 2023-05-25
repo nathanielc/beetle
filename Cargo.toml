@@ -1,25 +1,13 @@
 [workspace]
 members = [
-  "examples/embed",
-  "examples/importer",
-  "iroh",
-  "iroh-api",
-  "iroh-bitswap",
-  "iroh-car",
-  "iroh-embed",
-  "iroh-gateway",
-  "iroh-localops",
-  "iroh-metrics",
-  "iroh-one",
-  "iroh-p2p",
-  "iroh-resolver",
-  "iroh-rpc-client",
-  "iroh-rpc-types",
-  "iroh-share",
-  "iroh-unixfs",
-  "iroh-store",
-  "iroh-util",
-  "xtask",
+    "iroh-bitswap",
+    "iroh-car",
+    "iroh-metrics",
+    "iroh-p2p",
+    "iroh-rpc-client",
+    "iroh-rpc-types",
+    "iroh-store",
+    "iroh-util",
 ]
 # even if all crates are set to edition 2021, we still need to force the
 # resolver to 2
@@ -90,21 +78,13 @@ hyper = "0.14.23"
 ignore = "0.4.18"
 indicatif = "0.17.1"
 integer-encoding = "3.0"
-iroh = { version = "0.2.0", path = "./iroh" }
-iroh-api = { version = "0.2.0", path = "./iroh-api" }
 iroh-bitswap = { version = "0.2.0", path = "./iroh-bitswap" }
 iroh-car = { version = "0.2.0", path = "./iroh-car" }
-iroh-embed = { version = "0.2.0", path = "./iroh-embed" }
-iroh-gateway = { version = "0.2.0", path = "./iroh-gateway" }
-iroh-localops = { version = "0.2.0", path = "./iroh-localops" }
 iroh-metrics = { version = "0.2.0", path = "./iroh-metrics" }
-iroh-one = { version = "0.2.0", path = "./iroh-one" }
 iroh-p2p = { version = "0.2.0", path = "./iroh-p2p" }
-iroh-resolver = { version = "0.2.0", path = "./iroh-resolver" }
 iroh-rpc-client = { version = "0.2.0", path = "./iroh-rpc-client" }
 iroh-rpc-types = { version = "0.2.0", path = "./iroh-rpc-types" }
 iroh-store = { version = "0.2.0", path = "./iroh-store" }
-iroh-unixfs = { version = "0.2.0", path = "./iroh-unixfs" }
 iroh-util = { version = "0.2.0", path = "./iroh-util" }
 keyed_priority_queue = "0.4.1"
 lazy_static = "1.4"
@@ -134,7 +114,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.5.3"
 relative-path = "1.7.2"
-reqwest = { version = "0.11.10", default-features = false}
+reqwest = { version = "0.11.10", default-features = false }
 rkyv = "0.7.37"
 rlimit = "0.9.0"
 rocksdb = "0.19"
