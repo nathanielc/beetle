@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::AtomicBool,
+};
+use std::{fmt, sync::Arc};
+use std::{sync::atomic::Ordering, time::Duration};
 
 use ahash::AHashMap;
 use anyhow::{anyhow, bail, Context, Result};
@@ -9,8 +12,6 @@ use futures_util::stream::StreamExt;
 use iroh_metrics::{core::MRecorder, inc, libp2p_metrics, p2p::P2PMetrics};
 use iroh_rpc_client::Client as RpcClient;
 use iroh_rpc_types::p2p::P2pAddr;
-use libp2p::core::Multiaddr;
-use libp2p::gossipsub::{GossipsubMessage, MessageId, TopicHash};
 pub use libp2p::gossipsub::{IdentTopic, Topic};
 use libp2p::identify::{Event as IdentifyEvent, Info as IdentifyInfo};
 use libp2p::identity::Keypair;
@@ -25,6 +26,7 @@ use libp2p::multiaddr::Protocol;
 use libp2p::ping::Result as PingResult;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, SwarmEvent};
+use libp2p::{core::Multiaddr, swarm::AddressScore};
 use libp2p::{PeerId, Swarm};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot::{self, Sender as OneShotSender};
@@ -38,6 +40,7 @@ use crate::keys::{Keychain, Storage};
 use crate::providers::Providers;
 use crate::rpc::{P2p, ProviderRequestKey};
 use crate::swarm::build_swarm;
+use crate::GossipsubEvent;
 use crate::{
     behaviour::{Event, NodeBehaviour},
     rpc::{self, RpcMessage},
@@ -53,23 +56,6 @@ pub enum NetworkEvent {
     CancelLookupQuery(PeerId),
 }
 
-#[derive(Debug, Clone)]
-pub enum GossipsubEvent {
-    Subscribed {
-        peer_id: PeerId,
-        topic: TopicHash,
-    },
-    Unsubscribed {
-        peer_id: PeerId,
-        topic: TopicHash,
-    },
-    Message {
-        from: PeerId,
-        id: MessageId,
-        message: GossipsubMessage,
-    },
-}
-
 pub struct Node<KeyStorage: Storage> {
     swarm: Swarm<NodeBehaviour>,
     net_receiver_in: Receiver<RpcMessage>,
@@ -77,7 +63,7 @@ pub struct Node<KeyStorage: Storage> {
     lookup_queries: AHashMap<PeerId, Vec<oneshot::Sender<Result<IdentifyInfo>>>>,
     // TODO(ramfox): use new providers queue instead
     find_on_dht_queries: AHashMap<Vec<u8>, DHTQuery>,
-    network_events: Vec<Sender<NetworkEvent>>,
+    network_events: Vec<(Arc<AtomicBool>, Sender<NetworkEvent>)>,
     #[allow(dead_code)]
     rpc_client: RpcClient,
     _keychain: Keychain<KeyStorage>,
@@ -153,6 +139,10 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
 
         let keypair = load_identity(&mut keychain).await?;
         let mut swarm = build_swarm(&libp2p_config, &keypair, rpc_client.clone()).await?;
+
+        for addr in &libp2p_config.external_multiaddrs {
+            swarm.add_external_address(addr.clone(), AddressScore::Infinite);
+        }
 
         let mut listen_addrs = vec![];
         for addr in &libp2p_config.listening_multiaddrs {
@@ -329,7 +319,8 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
     #[tracing::instrument(skip(self))]
     pub fn network_events(&mut self) -> Receiver<NetworkEvent> {
         let (s, r) = channel(512);
-        self.network_events.push(s);
+        self.network_events
+            .push((Arc::new(AtomicBool::new(true)), s));
         r
     }
 
@@ -467,14 +458,24 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
 
     #[tracing::instrument(skip(self))]
     fn emit_network_event(&mut self, ev: NetworkEvent) {
-        for sender in &mut self.network_events {
+        let mut to_remove = Vec::new();
+        for (i, (open, sender)) in self.network_events.iter_mut().enumerate() {
+            if !open.load(Ordering::Relaxed) {
+                to_remove.push(i);
+                continue;
+            }
             let ev = ev.clone();
             let sender = sender.clone();
+            let open = open.clone();
             tokio::task::spawn(async move {
-                if let Err(e) = sender.send(ev.clone()).await {
-                    warn!("failed to send network event: {:?}", e);
+                if let Err(_e) = sender.send(ev.clone()).await {
+                    // Mark sender as closed so we stop sending events to it
+                    open.store(false, Ordering::Relaxed);
                 }
             });
+        }
+        for idx in to_remove.iter().rev() {
+            self.network_events.swap_remove(*idx);
         }
     }
 
@@ -805,7 +806,9 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
                 ProviderRequestKey::Dht(key) => {
                     debug!("fetching providers for: {:?}", key);
                     if self.swarm.behaviour().kad.is_enabled() {
-                        self.providers.push(key, limit, response_channel);
+                        if !self.providers.push(key.clone(), limit, response_channel) {
+                            warn!("provider query dropped because the queue is full {:?}", key);
+                        }
                     } else {
                         tokio::task::spawn(async move {
                             response_channel
@@ -826,6 +829,7 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
             },
             RpcMessage::StartProviding(response_channel, key) => {
                 if let Some(kad) = self.swarm.behaviour_mut().kad.as_mut() {
+                    debug!("kad.start_providing {:?}", key);
                     let res: Result<QueryId> = kad.start_providing(key).map_err(|e| e.into());
                     // TODO: wait for kad to process the query request before returning
                     response_channel.send(res).ok();
@@ -978,7 +982,11 @@ impl<KeyStorage: Storage> Node<KeyStorage> {
                             .map_err(|_| anyhow!("sender dropped"))?;
                     }
                     rpc::GossipsubMessage::Subscribe(response_channel, topic_hash) => {
-                        let res = gossipsub.subscribe(&IdentTopic::new(topic_hash.into_string()));
+                        let t = IdentTopic::new(topic_hash.into_string());
+                        let res = gossipsub
+                            .subscribe(&t)
+                            .map(|_| self.network_events())
+                            .map_err(anyhow::Error::new);
                         response_channel
                             .send(res)
                             .map_err(|_| anyhow!("sender dropped"))?;
@@ -1089,12 +1097,13 @@ mod tests {
     use crate::keys::{Keypair, MemoryStorage};
 
     use bytes::Bytes;
-    use futures::TryStreamExt;
+    use futures::{future, TryStreamExt};
     use rand::prelude::*;
     use rand_chacha::ChaCha8Rng;
     use ssh_key::private::Ed25519Keypair;
 
     use libp2p::{identity::Keypair as Libp2pKeypair, kad::record::Key};
+    use tokio::task;
 
     use super::*;
     use anyhow::Result;
@@ -1489,19 +1498,23 @@ mod tests {
         assert_eq!(test_runner_b.peer_id, got_peer.0);
 
         // create topic
-        let topic = TopicHash::from_raw("test_topic");
+        let topic = libp2p::gossipsub::TopicHash::from_raw("test_topic");
         // subscribe both to same topic
-        test_runner_a
+        let mut subscription_a = test_runner_a
             .client
             .gossipsub_subscribe(topic.clone())
             .await?;
-        test_runner_b
+        let subscription_b = test_runner_b
             .client
             .gossipsub_subscribe(topic.clone())
             .await?;
 
-        match test_runner_a.network_events.recv().await {
-            Some(NetworkEvent::Gossipsub(GossipsubEvent::Subscribed {
+        // Spawn a task to read all messages from b, but ignore them.
+        // This ensures the subscription request is actually processed.
+        task::spawn(subscription_b.for_each(|_| future::ready(())));
+
+        match subscription_a.next().await {
+            Some(Ok(GossipsubEvent::Subscribed {
                 peer_id,
                 topic: subscribed_topic,
             })) => {
@@ -1509,10 +1522,13 @@ mod tests {
                 assert_eq!(topic, subscribed_topic);
             }
             Some(n) => {
-                anyhow::bail!("unexpected network event: {:?}", n);
+                anyhow::bail!(
+                    "unexpected network event, expecting a GossipsubEvent::Subscribed, got: {:?}",
+                    n
+                );
             }
             None => {
-                anyhow::bail!("expected NetworkEvent::Gossipsub(Subscribed), received no event");
+                anyhow::bail!("expected GossipsubEvent::Subscribed, received no event");
             }
         };
 
@@ -1541,18 +1557,24 @@ mod tests {
             .gossipsub_publish(topic.clone(), msg.clone())
             .await?;
 
-        match test_runner_a.network_events.recv().await {
-            Some(NetworkEvent::Gossipsub(GossipsubEvent::Message { from, message, .. })) => {
+        match subscription_a.next().await {
+            Some(Ok(GossipsubEvent::Message { from, message, .. })) => {
                 assert_eq!(test_runner_b.peer_id, from);
                 assert_eq!(topic, message.topic);
                 assert_eq!(test_runner_b.peer_id, message.source.unwrap());
                 assert_eq!(msg.to_vec(), message.data);
             }
-            Some(n) => {
-                anyhow::bail!("unexpected network event: {:?}", n);
+            Some(Ok(n)) => {
+                anyhow::bail!(
+                    "unexpected network event, expecting a GossipsubEvent::Message, got: {:?}",
+                    n
+                );
+            }
+            Some(Err(e)) => {
+                anyhow::bail!("unexpected network error: {:?}", e);
             }
             None => {
-                anyhow::bail!("expected NetworkEvent::Gossipsub(Message), received no event");
+                anyhow::bail!("expected GossipsubEvent::Message, received no event");
             }
         };
 
@@ -1560,16 +1582,23 @@ mod tests {
             .client
             .gossipsub_unsubscribe(topic.clone())
             .await?;
-        match test_runner_a.network_events.recv().await {
-            Some(NetworkEvent::Gossipsub(GossipsubEvent::Unsubscribed {
+
+        match subscription_a.next().await {
+            Some(Ok(GossipsubEvent::Unsubscribed {
                 peer_id,
                 topic: unsubscribe_topic,
             })) => {
                 assert_eq!(test_runner_b.peer_id, peer_id);
                 assert_eq!(topic, unsubscribe_topic);
             }
-            Some(n) => {
-                anyhow::bail!("unexpected network event: {:?}", n);
+            Some(Ok(n)) => {
+                anyhow::bail!(
+                    "unexpected network event, expecting a GossipsubEvent::Unsubscribed, got: {:?}",
+                    n
+                );
+            }
+            Some(Err(e)) => {
+                anyhow::bail!("unexpected network error: {:?}", e);
             }
             None => {
                 anyhow::bail!("expected NetworkEvent::Gossipsub(Unsubscribed), received no event");

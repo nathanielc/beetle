@@ -16,6 +16,8 @@ pub struct Config {
     pub service_env: String,
     /// Flag to enable metrics collection.
     pub collect: bool,
+    /// Flag to enable metrics export.
+    pub export: bool,
     /// Flag to enable tracing collection.
     pub tracing: bool,
     /// The endpoint of the trace collector.
@@ -41,6 +43,7 @@ impl Source for Config {
         insert_into_config_map(&mut map, "version", self.version.clone());
         insert_into_config_map(&mut map, "service_env", self.service_env.clone());
         insert_into_config_map(&mut map, "collect", self.collect);
+        insert_into_config_map(&mut map, "export", self.export);
         insert_into_config_map(&mut map, "tracing", self.tracing);
         insert_into_config_map(
             &mut map,
@@ -82,6 +85,7 @@ impl Default for Config {
             version: "unknown".to_string(),
             service_env: "dev".to_string(),
             collect: false,
+            export: true,
             tracing: false,
             collector_endpoint: "http://localhost:4317".to_string(),
             prom_gateway_endpoint: "http://localhost:9091".to_string(),
@@ -135,6 +139,7 @@ mod tests {
             "tokio_console".to_string(),
             Value::new(None, cfg.tokio_console),
         );
+        expect.insert("export".to_string(), Value::new(None, cfg.export));
         let got = cfg.collect().unwrap();
         for key in got.keys() {
             let left = expect.get(key).unwrap();

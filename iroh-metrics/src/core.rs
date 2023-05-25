@@ -1,4 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+};
 
 use prometheus_client::{encoding::text::encode, registry::Registry};
 
@@ -19,7 +25,7 @@ lazy_static! {
 
 pub(crate) struct Core {
     enabled: AtomicBool,
-    registry: Registry,
+    registry: Mutex<Registry>,
     #[cfg(feature = "gateway")]
     gateway_metrics: gateway::Metrics,
     #[cfg(feature = "resolver")]
@@ -51,14 +57,25 @@ impl Default for Core {
             libp2p_metrics: p2p::Libp2pMetrics::new(&mut reg),
             #[cfg(feature = "p2p")]
             p2p_metrics: p2p::Metrics::new(&mut reg),
-            registry: reg,
+            registry: Mutex::new(reg),
         }
     }
 }
 
 impl Core {
-    pub(crate) fn registry(&self) -> &Registry {
-        &self.registry
+    pub fn register<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut Registry) -> T,
+    {
+        f(&mut self
+            .registry
+            .lock()
+            .expect("should be able to acquire lock"))
+    }
+    pub(crate) fn registry(&self) -> impl Deref<Target = Registry> + '_ {
+        self.registry
+            .lock()
+            .expect("should be able to acquire lock")
     }
 
     #[cfg(feature = "gateway")]
@@ -93,7 +110,7 @@ impl Core {
 
     pub(crate) fn encode(&self) -> Vec<u8> {
         let mut buf = vec![];
-        encode(&mut buf, self.registry()).unwrap();
+        encode(&mut buf, &self.registry()).unwrap();
         buf
     }
 

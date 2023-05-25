@@ -73,6 +73,8 @@ impl Source for ServerConfig {
 #[derive(PartialEq, Eq, Debug, Clone, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct Libp2pConfig {
+    /// External address.
+    pub external_multiaddrs: Vec<Multiaddr>,
     /// Local address.
     pub listening_multiaddrs: Vec<Multiaddr>,
     /// Bootstrap peer list.
@@ -184,6 +186,12 @@ impl Source for Libp2pConfig {
             .map(|b| b.to_string())
             .collect();
         insert_into_config_map(&mut map, "listening_multiaddrs", addrs);
+        let addrs: Vec<String> = self
+            .external_multiaddrs
+            .iter()
+            .map(|b| b.to_string())
+            .collect();
+        insert_into_config_map(&mut map, "external_multiaddrs", addrs);
         Ok(map)
     }
 }
@@ -210,6 +218,7 @@ impl Default for Libp2pConfig {
             .collect();
 
         Self {
+            external_multiaddrs: vec![],
             listening_multiaddrs: vec![
                 "/ip4/0.0.0.0/tcp/4444".parse().unwrap(),
                 "/ip4/0.0.0.0/udp/4445/quic-v1".parse().unwrap(),
@@ -368,6 +377,10 @@ mod tests {
             Value::new(None, bootstrap_peers),
         );
         expect.insert("listening_multiaddrs".to_string(), Value::new(None, addrs));
+        expect.insert(
+            "external_multiaddrs".to_string(),
+            Value::new(None, Vec::<String>::new()),
+        );
 
         let got = default.collect().unwrap();
         for key in got.keys() {
