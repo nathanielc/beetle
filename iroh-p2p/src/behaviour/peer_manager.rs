@@ -13,6 +13,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use lru::LruCache;
+use tracing::debug;
 
 pub struct PeerManager {
     info: AHashMap<PeerId, Info>,
@@ -79,15 +80,6 @@ impl NetworkBehaviour for PeerManager {
     fn new_handler(&mut self) -> Self::ConnectionHandler {
         dummy::ConnectionHandler
     }
-
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.info
-            .get(peer_id)
-            .and_then(|i| i.last_info.as_ref())
-            .map(|i| i.listen_addrs.clone())
-            .unwrap_or_default()
-    }
-
     fn on_swarm_event(&mut self, event: libp2p::swarm::FromSwarm<Self::ConnectionHandler>) {
         match event {
             libp2p::swarm::FromSwarm::ConnectionEstablished(event) => {
@@ -100,13 +92,8 @@ impl NetworkBehaviour for PeerManager {
 
                 if let Some(info) = self.info.get_mut(&event.peer_id) {
                     if let Some(ref mut info) = info.last_info {
-                        for failed_address in event.failed_addresses {
-                            if let Some(i) =
-                                info.listen_addrs.iter().position(|a| a == failed_address)
-                            {
-                                info.listen_addrs.remove(i);
-                            }
-                        }
+                        info.listen_addrs
+                            .retain(|addr| !event.failed_addresses.contains(addr))
                     }
                 }
             }

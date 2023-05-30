@@ -883,7 +883,22 @@ where
                 let peers = self.swarm.connected_peers().copied().collect::<Vec<_>>();
                 let peer_addresses: HashMap<PeerId, Vec<Multiaddr>> = peers
                     .into_iter()
-                    .map(|pid| (pid, self.swarm.behaviour_mut().addresses_of_peer(&pid)))
+                    .map(|pid| {
+                        (
+                            pid,
+                            self.swarm
+                                .behaviour_mut()
+                                .peer_manager
+                                .info_for_peer(&pid)
+                                .map(|info| {
+                                    info.last_info
+                                        .as_ref()
+                                        .map(|last_info| last_info.listen_addrs.clone())
+                                        .unwrap_or_default()
+                                })
+                                .unwrap_or_default(),
+                        )
+                    })
                     .collect();
 
                 response_channel
@@ -942,7 +957,18 @@ where
                 }
             }
             RpcMessage::AddressesOfPeer(response_channel, peer_id) => {
-                let addrs = self.swarm.behaviour_mut().addresses_of_peer(&peer_id);
+                let addrs = self
+                    .swarm
+                    .behaviour_mut()
+                    .peer_manager
+                    .info_for_peer(&peer_id)
+                    .map(|info| {
+                        info.last_info
+                            .as_ref()
+                            .map(|last_info| last_info.listen_addrs.clone())
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default();
                 response_channel.send(addrs).ok();
             }
             RpcMessage::NetDisconnect(response_channel, _peer_id) => {
@@ -1409,20 +1435,45 @@ mod tests {
         // since we aren't connected to any other nodes, we should not
         // have any information about our observed addresses
         assert!(lookup_a.observed_addrs.is_empty());
-        assert_lookup(lookup_a, test_runner_a.peer_id, &test_runner_a.addr)?;
+        assert_lookup(lookup_a, test_runner_a.peer_id, &test_runner_a.addr, &[])?;
 
         // connect
         test_runner_a.client.connect(peer_id_b, addrs_b).await?;
+        tokio::time::sleep(Duration::from_secs(10)).await;
         // Make sure we have exchanged identity information
         // peer b should be in the list of peers that peer a is connected to
         let peers = test_runner_a.client.get_peers().await?;
+        dbg!(&peers);
+        dbg!(&peer_id_b);
         assert!(peers.len() == 1);
-        let got_peer = peers.get(&peer_id_b).unwrap();
-        assert!(got_peer.contains(&test_runner_b.dial_addr));
+        let got_peer_addrs = peers.get(&peer_id_b).unwrap();
+        dbg!(&got_peer_addrs);
+        assert!(got_peer_addrs.contains(&test_runner_b.dial_addr));
 
         // lookup
         let lookup_b = test_runner_a.client.lookup(peer_id_b, None).await?;
-        assert_lookup(lookup_b, test_runner_b.peer_id, &test_runner_b.addr)?;
+        let expected_protocols = [
+            "/ipfs/ping/1.0.0",
+            "/ipfs/id/1.0.0",
+            "/ipfs/id/push/1.0.0",
+            "/ipfs/bitswap/1.2.0",
+            "/ipfs/bitswap/1.1.0",
+            "/ipfs/bitswap/1.0.0",
+            "/ipfs/bitswap",
+            "/ipfs/kad/1.0.0",
+            "/libp2p/autonat/1.0.0",
+            "/libp2p/circuit/relay/0.2.0/hop",
+            "/libp2p/circuit/relay/0.2.0/stop",
+            "/libp2p/dcutr",
+            "/meshsub/1.1.0",
+            "/meshsub/1.0.0",
+        ];
+        assert_lookup(
+            lookup_b,
+            test_runner_b.peer_id,
+            &test_runner_b.addr,
+            &expected_protocols[..],
+        )?;
         // now that we are connected & have exchanged identity information,
         // we should now be able to view the node's external addrs
         // these are the addresses that other nodes tell you "this is the address I see for you"
@@ -1442,23 +1493,8 @@ mod tests {
         got: Lookup,
         expected_peer_id: PeerId,
         expected_addr: &Multiaddr,
+        expected_protocols: &[&str],
     ) -> Result<()> {
-        let expected_protocols = vec![
-            "/ipfs/ping/1.0.0",
-            "/ipfs/id/1.0.0",
-            "/ipfs/id/push/1.0.0",
-            "/ipfs/bitswap/1.2.0",
-            "/ipfs/bitswap/1.1.0",
-            "/ipfs/bitswap/1.0.0",
-            "/ipfs/bitswap",
-            "/ipfs/kad/1.0.0",
-            "/libp2p/autonat/1.0.0",
-            "/libp2p/circuit/relay/0.2.0/hop",
-            "/libp2p/circuit/relay/0.2.0/stop",
-            "/libp2p/dcutr",
-            "/meshsub/1.1.0",
-            "/meshsub/1.0.0",
-        ];
         let expected_protocol_version = "ipfs/0.1.0";
         let expected_agent_version =
             format!("iroh/{}", std::env::var("CARGO_PKG_VERSION").unwrap());
