@@ -722,7 +722,7 @@ where
             }
             Event::Gossipsub(e) => {
                 libp2p_metrics().record(&e);
-                if let libp2p::gossipsub::GossipsubEvent::Message {
+                if let libp2p::gossipsub::Event::Message {
                     propagation_source,
                     message_id,
                     message,
@@ -733,13 +733,12 @@ where
                         id: message_id,
                         message,
                     }));
-                } else if let libp2p::gossipsub::GossipsubEvent::Subscribed { peer_id, topic } = e {
+                } else if let libp2p::gossipsub::Event::Subscribed { peer_id, topic } = e {
                     self.emit_network_event(NetworkEvent::Gossipsub(GossipsubEvent::Subscribed {
                         peer_id,
                         topic,
                     }));
-                } else if let libp2p::gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } = e
-                {
+                } else if let libp2p::gossipsub::Event::Unsubscribed { peer_id, topic } = e {
                     self.emit_network_event(NetworkEvent::Gossipsub(
                         GossipsubEvent::Unsubscribed { peer_id, topic },
                     ));

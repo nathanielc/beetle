@@ -80,6 +80,6 @@ make_metrics! {
     MessageQueuesDestroyed: Counter: "",
     MessageQueuesStopped: Counter: "",
 
-    NetworkBehaviourActionPollTick: Counter: "",
+    ToSwarmPollTick: Counter: "",
     NetworkPollTick: Counter: ""
 }

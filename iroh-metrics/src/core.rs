@@ -109,9 +109,9 @@ impl Core {
     }
 
     pub(crate) fn encode(&self) -> Vec<u8> {
-        let mut buf = vec![];
+        let mut buf = String::new();
         encode(&mut buf, &self.registry()).unwrap();
-        buf
+        buf.into()
     }
 
     pub(crate) fn set_enabled(&self, enabled: bool) {

@@ -25,11 +25,7 @@ impl Metrics {
     pub fn new(registry: &mut Registry) -> Self {
         let sub_registry = registry.sub_registry_with_prefix("resolver");
         let cache_hit = Counter::default();
-        sub_registry.register(
-            METRICS_CACHE_HIT,
-            "Number of cache hits",
-            Box::new(cache_hit.clone()),
-        );
+        sub_registry.register(METRICS_CACHE_HIT, "Number of cache hits", cache_hit.clone());
 
         let cache_miss = Counter::default();
         sub_registry.register(

@@ -7,13 +7,9 @@ use std::{
 use ahash::AHashMap;
 use iroh_metrics::{core::MRecorder, inc, p2p::P2PMetrics};
 use libp2p::{
-    core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint},
     identify::Info as IdentifyInfo,
     ping::Success as PingSuccess,
-    swarm::{
-        dummy, ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
-        NetworkBehaviourAction, PollParameters,
-    },
+    swarm::{dummy, ConnectionId, DialError, NetworkBehaviour, PollParameters},
     Multiaddr, PeerId,
 };
 use lru::LruCache;
@@ -92,108 +88,60 @@ impl NetworkBehaviour for PeerManager {
             .unwrap_or_default()
     }
 
-    fn inject_connection_established(
-        &mut self,
-        peer_id: &PeerId,
-        _connection_id: &ConnectionId,
-        _endpoint: &ConnectedPoint,
-        failed_addresses: Option<&Vec<Multiaddr>>,
-        other_established: usize,
-    ) {
-        if other_established == 0 {
-            let p = self.bad_peers.pop(peer_id);
-            if p.is_some() {
-                inc!(P2PMetrics::BadPeerRemoved);
-            }
-        }
+    fn on_swarm_event(&mut self, event: libp2p::swarm::FromSwarm<Self::ConnectionHandler>) {
+        match event {
+            libp2p::swarm::FromSwarm::ConnectionEstablished(event) => {
+                if event.other_established == 0 {
+                    let p = self.bad_peers.pop(&event.peer_id);
+                    if p.is_some() {
+                        inc!(P2PMetrics::BadPeerRemoved);
+                    }
+                }
 
-        if let Some(failed_addresses) = failed_addresses {
-            if let Some(info) = self.info.get_mut(peer_id) {
-                if let Some(ref mut info) = info.last_info {
-                    for addr in failed_addresses {
-                        if let Some(i) = info.listen_addrs.iter().position(|a| a == addr) {
-                            info.listen_addrs.remove(i);
+                if let Some(info) = self.info.get_mut(&event.peer_id) {
+                    if let Some(ref mut info) = info.last_info {
+                        for failed_address in event.failed_addresses {
+                            if let Some(i) =
+                                info.listen_addrs.iter().position(|a| a == failed_address)
+                            {
+                                info.listen_addrs.remove(i);
+                            }
                         }
                     }
                 }
             }
-        }
-    }
 
-    fn inject_connection_closed(
-        &mut self,
-        _: &PeerId,
-        _: &ConnectionId,
-        _: &ConnectedPoint,
-        _: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-        _remaining_established: usize,
-    ) {
-    }
-
-    fn inject_address_change(
-        &mut self,
-        _: &PeerId,
-        _: &ConnectionId,
-        _old: &ConnectedPoint,
-        _new: &ConnectedPoint,
-    ) {
-    }
-
-    fn inject_event(
-        &mut self,
-        _peer_id: PeerId,
-        _connection: ConnectionId,
-        _event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
-    ) {
-    }
-
-    fn inject_dial_failure(
-        &mut self,
-        peer_id: Option<PeerId>,
-        _handler: Self::ConnectionHandler,
-        error: &DialError,
-    ) {
-        if let Some(peer_id) = peer_id {
-            match error {
-                DialError::ConnectionLimit(_) | DialError::DialPeerConditionFalse(_) => {}
-                _ => {
-                    if self.bad_peers.put(peer_id, ()).is_none() {
-                        inc!(P2PMetrics::BadPeer);
+            libp2p::swarm::FromSwarm::DialFailure(event) => {
+                if let Some(peer_id) = event.peer_id {
+                    match event.error {
+                        DialError::ConnectionLimit(_) | DialError::DialPeerConditionFalse(_) => {}
+                        _ => {
+                            if self.bad_peers.put(peer_id, ()).is_none() {
+                                inc!(P2PMetrics::BadPeer);
+                            }
+                            self.info.remove(&peer_id);
+                        }
                     }
-                    self.info.remove(&peer_id);
                 }
             }
+            // Not interested in any other events
+            _ => {}
         }
     }
 
-    fn inject_listen_failure(
+    fn on_connection_handler_event(
         &mut self,
-        _local_addr: &Multiaddr,
-        _send_back_addr: &Multiaddr,
-        _handler: Self::ConnectionHandler,
+        _peer_id: PeerId,
+        _connection_id: ConnectionId,
+        _event: libp2p::swarm::THandlerOutEvent<Self>,
     ) {
     }
-
-    fn inject_new_listener(&mut self, _id: ListenerId) {}
-
-    fn inject_new_listen_addr(&mut self, _id: ListenerId, _addr: &Multiaddr) {}
-
-    fn inject_expired_listen_addr(&mut self, _id: ListenerId, _addr: &Multiaddr) {}
-
-    fn inject_listener_error(&mut self, _id: ListenerId, _err: &(dyn std::error::Error + 'static)) {
-    }
-
-    fn inject_listener_closed(&mut self, _id: ListenerId, _reason: Result<(), &std::io::Error>) {}
-
-    fn inject_new_external_addr(&mut self, _addr: &Multiaddr) {}
-
-    fn inject_expired_external_addr(&mut self, _addr: &Multiaddr) {}
 
     fn poll(
         &mut self,
         _cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<libp2p::swarm::ToSwarm<Self::OutEvent, libp2p::swarm::THandlerInEvent<Self>>> {
         // TODO(ramfox):
         // We can only get the supported protocols of the local node by examining the
         // `PollParameters`, which mean you can only get the supported protocols by examining the

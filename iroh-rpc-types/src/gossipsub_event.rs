@@ -1,6 +1,6 @@
 use futures::stream::BoxStream;
 use libp2p::{
-    gossipsub::{GossipsubMessage, MessageId, TopicHash},
+    gossipsub::{Message, MessageId, TopicHash},
     PeerId,
 };
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ pub enum GossipsubEvent {
         from: PeerId,
         id: MessageId,
         #[serde(with = "GossipsubMessageDef")]
-        message: GossipsubMessage,
+        message: Message,
     },
 }
 
@@ -43,7 +43,7 @@ impl From<TopicHashDef> for TopicHash {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "GossipsubMessage")]
+#[serde(remote = "Message")]
 struct GossipsubMessageDef {
     source: Option<PeerId>,
     data: Vec<u8>,

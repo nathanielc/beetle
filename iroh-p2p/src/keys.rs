@@ -52,7 +52,7 @@ impl From<Keypair> for libp2p::identity::Keypair {
         match kp {
             Keypair::Ed25519(kp) => {
                 let mut bytes = kp.to_bytes();
-                let kp = libp2p::identity::ed25519::Keypair::decode(&mut bytes)
+                let kp = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut bytes)
                     .expect("invalid encoding");
                 libp2p::identity::Keypair::Ed25519(kp)
             }

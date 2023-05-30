@@ -6,7 +6,6 @@ use cid::Cid;
 use iroh_bitswap::{Bitswap, Block, Config as BitswapConfig, Store};
 use iroh_rpc_client::Client;
 use libp2p::core::identity::Keypair;
-use libp2p::core::PeerId;
 use libp2p::gossipsub::{self, MessageAuthenticity};
 use libp2p::identify;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
@@ -18,6 +17,7 @@ use libp2p::relay;
 use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::{autonat, dcutr};
+use libp2p_identity::PeerId;
 use tracing::{info, warn};
 
 pub use self::event::Event;
@@ -40,10 +40,10 @@ pub(crate) struct NodeBehaviour<B: NetworkBehaviour> {
     pub(crate) kad: Toggle<Kademlia<MemoryStore>>,
     mdns: Toggle<Mdns>,
     pub(crate) autonat: Toggle<autonat::Behaviour>,
-    relay: Toggle<relay::v2::relay::Relay>,
-    relay_client: Toggle<relay::v2::client::Client>,
-    dcutr: Toggle<dcutr::behaviour::Behaviour>,
-    pub(crate) gossipsub: Toggle<gossipsub::Gossipsub>,
+    relay: Toggle<relay::Behaviour>,
+    relay_client: Toggle<relay::client::Behaviour>,
+    dcutr: Toggle<dcutr::Behaviour>,
+    pub(crate) gossipsub: Toggle<gossipsub::Behaviour>,
     pub(crate) peer_manager: PeerManager,
 
     custom_behaviour: Toggle<B>,
@@ -86,7 +86,7 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
     pub async fn new(
         local_key: &Keypair,
         config: &Libp2pConfig,
-        relay_client: Option<relay::v2::client::Client>,
+        relay_client: Option<relay::client::Behaviour>,
         rpc_client: Client,
         custom_behaviour: Option<B>,
     ) -> Result<Self> {
@@ -110,7 +110,7 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
 
         let mdns = if config.mdns {
             info!("init mdns");
-            Some(Mdns::new(Default::default())?)
+            Some(Mdns::new(Default::default(), peer_id.clone())?)
         } else {
             None
         }
@@ -175,8 +175,8 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
 
         let relay = if config.relay_server {
             info!("init relay server");
-            let config = relay::v2::relay::Config::default();
-            let r = relay::v2::relay::Relay::new(local_key.public().to_peer_id(), config);
+            let config = relay::Config::default();
+            let r = relay::Behaviour::new(local_key.public().to_peer_id(), config);
             Some(r)
         } else {
             None
@@ -187,7 +187,7 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
             info!("init relay client");
             let relay_client =
                 relay_client.expect("missing relay client even though it was enabled");
-            let dcutr = dcutr::behaviour::Behaviour::new();
+            let dcutr = dcutr::Behaviour::new(peer_id.clone());
             (Some(dcutr), Some(relay_client))
         } else {
             (None, None)
@@ -202,10 +202,10 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
 
         let gossipsub = if config.gossipsub {
             info!("init gossipsub");
-            let gossipsub_config = gossipsub::GossipsubConfig::default();
+            let gossipsub_config = gossipsub::Config::default();
             let message_authenticity = MessageAuthenticity::Signed(local_key.clone());
             Some(
-                gossipsub::Gossipsub::new(message_authenticity, gossipsub_config)
+                gossipsub::Behaviour::new(message_authenticity, gossipsub_config)
                     .map_err(|e| anyhow::anyhow!("{}", e))?,
             )
         } else {

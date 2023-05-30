@@ -13,7 +13,7 @@ use iroh_rpc_client::{
 use iroh_rpc_types::{
     p2p::*, RpcError, RpcResult, VersionRequest, VersionResponse, WatchRequest, WatchResponse,
 };
-use libp2p::gossipsub::{error::PublishError, MessageId, TopicHash};
+use libp2p::gossipsub::{MessageId, PublishError, TopicHash};
 use libp2p::identify::Info as IdentifyInfo;
 use libp2p::kad::record::Key;
 use libp2p::Multiaddr;
@@ -423,7 +423,7 @@ impl P2p {
                     match &event {
                         GossipsubEvent::Subscribed { topic, .. } |
                             GossipsubEvent::Unsubscribed {topic, .. } |
-                            GossipsubEvent::Message { message: libp2p::gossipsub::GossipsubMessage{ topic , .. }, .. } => {
+                            GossipsubEvent::Message { message: libp2p::gossipsub::Message{ topic , .. }, .. } => {
                                 if *topic == t {
                                     yield Box::new(GossipsubSubscribeResponse {event});
                                 }

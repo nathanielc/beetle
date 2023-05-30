@@ -43,69 +43,61 @@ impl Metrics {
         sub_registry.register(
             METRICS_CNT_REQUESTS_TOTAL,
             "Total number of requests received by the gateway",
-            Box::new(requests_total.clone()),
+            requests_total.clone(),
         );
 
         let ttf_block = Gauge::default();
         sub_registry.register(
             METRICS_TIME_TO_FETCH_FIRST_BLOCK,
             "Time from start of request to fetching the first block",
-            Box::new(ttf_block.clone()),
+            ttf_block.clone(),
         );
 
         let tts_block = Gauge::default();
         sub_registry.register(
             METRICS_TIME_TO_SERVE_FIRST_BLOCK,
             "Time from start of request to serving the first block",
-            Box::new(tts_block.clone()),
+            tts_block.clone(),
         );
 
         let tts_file = Gauge::default();
         sub_registry.register(
             METRICS_TIME_TO_SERVE_FULL_FILE,
             "Time from start of request to serving the full file",
-            Box::new(tts_file.clone()),
+            tts_file.clone(),
         );
 
         let bytes_streamed = Counter::default();
         sub_registry.register(
             METRICS_BYTES_STREAMED,
             "Total number of bytes streamed",
-            Box::new(bytes_streamed.clone()),
+            bytes_streamed.clone(),
         );
 
         let error_count = Counter::default();
-        sub_registry.register(
-            METRICS_ERROR,
-            "Number of errors",
-            Box::new(error_count.clone()),
-        );
+        sub_registry.register(METRICS_ERROR, "Number of errors", error_count.clone());
 
         let fail_count = Counter::default();
         sub_registry.register(
             METRICS_FAIL,
             "Number of failed requests",
-            Box::new(fail_count.clone()),
+            fail_count.clone(),
         );
 
         let hist_ttfb = Histogram::new(linear_buckets(0.0, 500.0, 240));
-        sub_registry.register(
-            METRICS_HIST_TTFB,
-            "Histogram of TTFB",
-            Box::new(hist_ttfb.clone()),
-        );
+        sub_registry.register(METRICS_HIST_TTFB, "Histogram of TTFB", hist_ttfb.clone());
         let hist_ttfb_cached = Histogram::new(linear_buckets(0.0, 500.0, 240));
         sub_registry.register(
             METRICS_HIST_TTFB_CACHED,
             "Histogram of TTFB from Cache",
-            Box::new(hist_ttfb_cached.clone()),
+            hist_ttfb_cached.clone(),
         );
 
         let hist_ttsf = Histogram::new(linear_buckets(0.0, 500.0, 240));
         sub_registry.register(
             METRICS_HIST_TTSERVE,
             "Histogram of TTSERVE",
-            Box::new(hist_ttsf.clone()),
+            hist_ttsf.clone(),
         );
 
         Self {

@@ -29,30 +29,30 @@ impl Metrics {
     pub(crate) fn new(registry: &mut Registry) -> Self {
         let sub_registry = registry.sub_registry_with_prefix("p2p");
         let bad_peers = Counter::default();
-        sub_registry.register(P2PMetrics::BadPeer.name(), "", Box::new(bad_peers.clone()));
+        sub_registry.register(P2PMetrics::BadPeer.name(), "", bad_peers.clone());
 
         let bad_peers_removed = Counter::default();
         sub_registry.register(
             P2PMetrics::BadPeerRemoved.name(),
             "",
-            Box::new(bad_peers_removed.clone()),
+            bad_peers_removed.clone(),
         );
 
         let skipped_peer_bitswap = Counter::default();
         sub_registry.register(
             P2PMetrics::SkippedPeerBitswap.name(),
             "",
-            Box::new(skipped_peer_bitswap.clone()),
+            skipped_peer_bitswap.clone(),
         );
         let skipped_peer_kad = Counter::default();
         sub_registry.register(
             P2PMetrics::SkippedPeerKad.name(),
             "",
-            Box::new(skipped_peer_kad.clone()),
+            skipped_peer_kad.clone(),
         );
 
         let loops = Counter::default();
-        sub_registry.register(P2PMetrics::LoopCounter.name(), "", Box::new(loops.clone()));
+        sub_registry.register(P2PMetrics::LoopCounter.name(), "", loops.clone());
 
         Self {
             bad_peers,

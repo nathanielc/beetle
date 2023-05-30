@@ -12,14 +12,18 @@ use futures::{
     stream::{BoxStream, SelectAll},
 };
 use iroh_metrics::{bitswap::BitswapMetrics, core::MRecorder, inc};
-use libp2p::core::{
-    muxing::SubstreamBox,
-    upgrade::{InboundUpgrade, NegotiationError, OutboundUpgrade, UpgradeError},
-    Negotiated,
-};
 use libp2p::swarm::{
+    handler::{DialUpgradeError, FullyNegotiatedOutbound},
     ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, KeepAlive,
-    NegotiatedSubstream, SubstreamProtocol,
+    SubstreamProtocol,
+};
+use libp2p::{
+    core::{
+        muxing::SubstreamBox,
+        upgrade::{NegotiationError, UpgradeError},
+        Negotiated,
+    },
+    swarm::handler::FullyNegotiatedInbound,
 };
 use smallvec::SmallVec;
 use tokio::sync::oneshot;
@@ -173,65 +177,6 @@ impl ConnectionHandler for BitswapHandler {
         self.listen_protocol.clone()
     }
 
-    fn inject_fully_negotiated_inbound(
-        &mut self,
-        substream: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
-        _info: Self::InboundOpenInfo,
-    ) {
-        let protocol_id = substream.codec().protocol;
-        if self.protocol.is_none() {
-            self.protocol = Some(protocol_id);
-        }
-
-        trace!("New inbound substream request: {:?}", protocol_id);
-        self.inbound_substreams
-            .push(Box::pin(inbound_substream(substream)));
-    }
-
-    fn inject_fully_negotiated_outbound(
-        &mut self,
-        substream: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
-        message: Self::OutboundOpenInfo,
-    ) {
-        let protocol_id = substream.codec().protocol;
-        if self.protocol.is_none() {
-            self.protocol = Some(protocol_id);
-        }
-
-        trace!("New outbound substream: {:?}", protocol_id);
-        self.outbound_substreams
-            .push(Box::pin(outbound_substream(substream, message)));
-    }
-
-    fn inject_event(&mut self, message: BitswapHandlerIn) {
-        match message {
-            BitswapHandlerIn::Message(m, response) => {
-                self.send_queue.push_back((m, response));
-
-                // sending a message, reset keepalive
-                self.keep_alive = KeepAlive::Until(Instant::now() + self.idle_timeout);
-            }
-            BitswapHandlerIn::Protect => {
-                self.keep_alive = KeepAlive::Yes;
-            }
-            BitswapHandlerIn::Unprotect => {
-                self.keep_alive =
-                    KeepAlive::Until(Instant::now() + Duration::from_secs(INITIAL_KEEP_ALIVE));
-            }
-        }
-    }
-
-    fn inject_dial_upgrade_error(
-        &mut self,
-        _: Self::OutboundOpenInfo,
-        e: ConnectionHandlerUpgrErr<
-            <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Error,
-        >,
-    ) {
-        warn!("Dial upgrade error {:?}", e);
-        self.upgrade_errors.push_back(e);
-    }
-
     fn connection_keep_alive(&self) -> KeepAlive {
         self.keep_alive
     }
@@ -285,6 +230,71 @@ impl ConnectionHandler for BitswapHandler {
         }
 
         Poll::Pending
+    }
+
+    fn on_connection_event(
+        &mut self,
+        event: libp2p::swarm::handler::ConnectionEvent<
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
+    ) {
+        match event {
+            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedInbound(
+                FullyNegotiatedInbound { protocol, .. },
+            ) => {
+                let protocol_id = protocol.codec().protocol;
+                if self.protocol.is_none() {
+                    self.protocol = Some(protocol_id);
+                }
+
+                trace!("New inbound substream request: {:?}", protocol_id);
+                self.inbound_substreams
+                    .push(Box::pin(inbound_substream(protocol)));
+            }
+            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedOutbound(
+                FullyNegotiatedOutbound { protocol, info },
+            ) => {
+                let protocol_id = protocol.codec().protocol;
+                if self.protocol.is_none() {
+                    self.protocol = Some(protocol_id);
+                }
+
+                trace!("New outbound substream: {:?}", protocol_id);
+                self.outbound_substreams
+                    .push(Box::pin(outbound_substream(protocol, info)));
+            }
+            libp2p::swarm::handler::ConnectionEvent::AddressChange(_) => {}
+            libp2p::swarm::handler::ConnectionEvent::DialUpgradeError(DialUpgradeError {
+                error,
+                ..
+            }) => {
+                warn!("Dial upgrade error {:?}", error);
+                self.upgrade_errors.push_back(error);
+            }
+
+            libp2p::swarm::handler::ConnectionEvent::ListenUpgradeError(_) => {}
+        }
+    }
+
+    fn on_behaviour_event(&mut self, event: Self::InEvent) {
+        match event {
+            BitswapHandlerIn::Message(m, response) => {
+                self.send_queue.push_back((m, response));
+
+                // sending a message, reset keepalive
+                self.keep_alive = KeepAlive::Until(Instant::now() + self.idle_timeout);
+            }
+            BitswapHandlerIn::Protect => {
+                self.keep_alive = KeepAlive::Yes;
+            }
+            BitswapHandlerIn::Unprotect => {
+                self.keep_alive =
+                    KeepAlive::Until(Instant::now() + Duration::from_secs(INITIAL_KEEP_ALIVE));
+            }
+        }
     }
 }
 

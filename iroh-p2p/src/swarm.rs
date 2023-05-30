@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use futures::future::Either;
 use iroh_rpc_client::Client;
 use libp2p::{
     core::{
@@ -10,14 +11,14 @@ use libp2p::{
     },
     dns,
     identity::Keypair,
-    mplex, noise, quic,
-    swarm::{
-        derive_prelude::EitherOutput, ConnectionLimits, Executor, NetworkBehaviour, SwarmBuilder,
-    },
+    noise,
+    swarm::{ConnectionLimits, Executor, NetworkBehaviour, SwarmBuilder},
     tcp, websocket,
     yamux::{self, WindowUpdateMode},
     PeerId, Swarm, Transport,
 };
+use libp2p_mplex;
+use libp2p_quic;
 
 use crate::{
     behaviour::{Event, NodeBehaviour},
@@ -30,7 +31,7 @@ async fn build_transport(
     config: &Libp2pConfig,
 ) -> (
     Boxed<(PeerId, StreamMuxerBox)>,
-    Option<libp2p::relay::v2::client::Client>,
+    Option<libp2p::relay::client::Behaviour>,
 ) {
     // TODO: make transports configurable
 
@@ -46,8 +47,8 @@ async fn build_transport(
     let tcp_ws_transport = tcp_transport.or_transport(ws_tcp);
 
     // Quic
-    let quic_config = quic::Config::new(keypair);
-    let quic_transport = quic::tokio::Transport::new(quic_config);
+    let quic_config = libp2p_quic::Config::new(keypair);
+    let quic_transport = libp2p_quic::tokio::Transport::new(quic_config);
 
     // Noise config for TCP & Websockets
     let auth_config = {
@@ -60,10 +61,10 @@ async fn build_transport(
 
     // Stream muxer config for TCP & Websockets
     let muxer_config = {
-        let mut mplex_config = mplex::MplexConfig::new();
+        let mut mplex_config = libp2p_mplex::MplexConfig::new();
         mplex_config.set_max_buffer_size(usize::MAX);
 
-        let mut yamux_config = yamux::YamuxConfig::default();
+        let mut yamux_config = yamux::Config::default();
         yamux_config.set_max_buffer_size(16 * 1024 * 1024); // TODO: configurable
         yamux_config.set_receive_window_size(16 * 1024 * 1024); // TODO: configurable
         yamux_config.set_window_update_mode(WindowUpdateMode::on_receive());
@@ -73,9 +74,7 @@ async fn build_transport(
     // Enable Relay if enabled
     let (tcp_ws_transport, relay_client) = if config.relay_client {
         let (relay_transport, relay_client) =
-            libp2p::relay::v2::client::Client::new_transport_and_behaviour(
-                keypair.public().to_peer_id(),
-            );
+            libp2p::relay::client::new(keypair.public().to_peer_id());
 
         let transport = OrTransport::new(relay_transport, tcp_ws_transport);
         let transport = transport
@@ -99,8 +98,8 @@ async fn build_transport(
     // Merge in Quick
     let transport = OrTransport::new(quic_transport, tcp_ws_transport)
         .map(|o, _| match o {
-            EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-            EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
         })
         .boxed();
 
@@ -140,7 +139,7 @@ where
     let swarm = SwarmBuilder::with_executor(transport, behaviour, peer_id, Tokio)
         .connection_limits(limits)
         .notify_handler_buffer_size(config.notify_handler_buffer_size.try_into()?)
-        .connection_event_buffer_size(config.connection_event_buffer_size)
+        .per_connection_event_buffer_size(config.connection_event_buffer_size)
         .dial_concurrency_factor(config.dial_concurrency_factor.try_into().unwrap())
         .build();
 

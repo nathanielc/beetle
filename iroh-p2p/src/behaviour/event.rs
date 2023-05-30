@@ -1,12 +1,8 @@
 use iroh_bitswap::BitswapEvent;
 use libp2p::{
-    autonat, dcutr,
-    gossipsub::GossipsubEvent,
-    identify::Event as IdentifyEvent,
+    autonat, dcutr, gossipsub, identify,
     kad::KademliaEvent,
-    mdns::Event as MdnsEvent,
-    ping::Event as PingEvent,
-    relay,
+    mdns, ping, relay,
     swarm::{behaviour::toggle::Toggle, dummy, NetworkBehaviour},
 };
 
@@ -17,28 +13,28 @@ use super::peer_manager::PeerManagerEvent;
 /// [`NodeBehaviour`]: crate::behaviour::NodeBehaviour
 #[derive(Debug)]
 pub enum Event<B: NetworkBehaviour> {
-    Ping(PingEvent),
-    Identify(Box<IdentifyEvent>),
+    Ping(ping::Event),
+    Identify(Box<identify::Event>),
     Kademlia(KademliaEvent),
-    Mdns(MdnsEvent),
+    Mdns(mdns::Event),
     Bitswap(BitswapEvent),
     Autonat(autonat::Event),
-    Relay(relay::v2::relay::Event),
-    RelayClient(relay::v2::client::Event),
-    Dcutr(dcutr::behaviour::Event),
-    Gossipsub(GossipsubEvent),
+    Relay(relay::Event),
+    RelayClient(relay::client::Event),
+    Dcutr(dcutr::Event),
+    Gossipsub(gossipsub::Event),
     PeerManager(PeerManagerEvent),
     Custom(B::OutEvent),
 }
 
-impl<B: NetworkBehaviour> From<PingEvent> for Event<B> {
-    fn from(event: PingEvent) -> Self {
+impl<B: NetworkBehaviour> From<ping::Event> for Event<B> {
+    fn from(event: ping::Event) -> Self {
         Event::Ping(event)
     }
 }
 
-impl<B: NetworkBehaviour> From<IdentifyEvent> for Event<B> {
-    fn from(event: IdentifyEvent) -> Self {
+impl<B: NetworkBehaviour> From<identify::Event> for Event<B> {
+    fn from(event: identify::Event) -> Self {
         Event::Identify(Box::new(event))
     }
 }
@@ -49,8 +45,8 @@ impl<B: NetworkBehaviour> From<KademliaEvent> for Event<B> {
     }
 }
 
-impl<B: NetworkBehaviour> From<MdnsEvent> for Event<B> {
-    fn from(event: MdnsEvent) -> Self {
+impl<B: NetworkBehaviour> From<mdns::Event> for Event<B> {
+    fn from(event: mdns::Event) -> Self {
         Event::Mdns(event)
     }
 }
@@ -61,8 +57,8 @@ impl<B: NetworkBehaviour> From<BitswapEvent> for Event<B> {
     }
 }
 
-impl<B: NetworkBehaviour> From<GossipsubEvent> for Event<B> {
-    fn from(event: GossipsubEvent) -> Self {
+impl<B: NetworkBehaviour> From<gossipsub::Event> for Event<B> {
+    fn from(event: gossipsub::Event) -> Self {
         Event::Gossipsub(event)
     }
 }
@@ -73,20 +69,20 @@ impl<B: NetworkBehaviour> From<autonat::Event> for Event<B> {
     }
 }
 
-impl<B: NetworkBehaviour> From<relay::v2::relay::Event> for Event<B> {
-    fn from(event: relay::v2::relay::Event) -> Self {
+impl<B: NetworkBehaviour> From<relay::Event> for Event<B> {
+    fn from(event: relay::Event) -> Self {
         Event::Relay(event)
     }
 }
 
-impl<B: NetworkBehaviour> From<relay::v2::client::Event> for Event<B> {
-    fn from(event: relay::v2::client::Event) -> Self {
+impl<B: NetworkBehaviour> From<relay::client::Event> for Event<B> {
+    fn from(event: relay::client::Event) -> Self {
         Event::RelayClient(event)
     }
 }
 
-impl<B: NetworkBehaviour> From<dcutr::behaviour::Event> for Event<B> {
-    fn from(event: dcutr::behaviour::Event) -> Self {
+impl<B: NetworkBehaviour> From<dcutr::Event> for Event<B> {
+    fn from(event: dcutr::Event) -> Self {
         Event::Dcutr(event)
     }
 }
