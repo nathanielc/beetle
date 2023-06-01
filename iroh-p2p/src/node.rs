@@ -1439,7 +1439,10 @@ mod tests {
 
         // connect
         test_runner_a.client.connect(peer_id_b, addrs_b).await?;
-        tokio::time::sleep(Duration::from_secs(10)).await;
+
+        // Make sure the peers have had time to negotiate protocols
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+
         // Make sure we have exchanged identity information
         // peer b should be in the list of peers that peer a is connected to
         let peers = test_runner_a.client.get_peers().await?;
@@ -1452,6 +1455,8 @@ mod tests {
 
         // lookup
         let lookup_b = test_runner_a.client.lookup(peer_id_b, None).await?;
+        // Expected protocols are only the ones negotiated with a connected peer.
+        // NOTE: dcutr is not in the list because it is not negotiated with the peer.
         let expected_protocols = [
             "/ipfs/ping/1.0.0",
             "/ipfs/id/1.0.0",
@@ -1464,7 +1469,6 @@ mod tests {
             "/libp2p/autonat/1.0.0",
             "/libp2p/circuit/relay/0.2.0/hop",
             "/libp2p/circuit/relay/0.2.0/stop",
-            "/libp2p/dcutr",
             "/meshsub/1.1.0",
             "/meshsub/1.0.0",
         ];
