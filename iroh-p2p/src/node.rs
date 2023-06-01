@@ -1446,11 +1446,8 @@ mod tests {
         // Make sure we have exchanged identity information
         // peer b should be in the list of peers that peer a is connected to
         let peers = test_runner_a.client.get_peers().await?;
-        dbg!(&peers);
-        dbg!(&peer_id_b);
         assert!(peers.len() == 1);
         let got_peer_addrs = peers.get(&peer_id_b).unwrap();
-        dbg!(&got_peer_addrs);
         assert!(got_peer_addrs.contains(&test_runner_b.dial_addr));
 
         // lookup

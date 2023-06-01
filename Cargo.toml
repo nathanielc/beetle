@@ -149,11 +149,11 @@ trust-dns-resolver = "0.22.0"
 unsigned-varint = "0.7.1"
 url = "2.2.2"
 urlencoding = "2.1"
+void = "1.0"
 wasm-timer = "0.2.5"
 which = "4.3.0"
 xtaskops = "0.3"
 zeroize = "1.4"
-void = "1.0"
 
 [profile.optimized-release]
 inherits = 'release'

@@ -1,9 +1,7 @@
 use iroh_bitswap::BitswapEvent;
 use libp2p::{
-    autonat, dcutr, gossipsub, identify,
-    kad::KademliaEvent,
-    mdns, ping, relay,
-    swarm::{behaviour::toggle::Toggle, dummy, NetworkBehaviour},
+    autonat, dcutr, gossipsub, identify, kad::KademliaEvent, mdns, ping, relay,
+    swarm::NetworkBehaviour,
 };
 
 use super::peer_manager::PeerManagerEvent;
@@ -25,6 +23,7 @@ pub enum Event<B: NetworkBehaviour> {
     Gossipsub(gossipsub::Event),
     PeerManager(PeerManagerEvent),
     Custom(B::OutEvent),
+    Void,
 }
 
 impl<B: NetworkBehaviour> From<ping::Event> for Event<B> {
@@ -92,11 +91,8 @@ impl<B: NetworkBehaviour> From<PeerManagerEvent> for Event<B> {
         Event::PeerManager(event)
     }
 }
-
-// Implement this instance of the trait so that the Toggle<dummy::Behaviour>
-// may be used when no custom behavior is desired.
-impl From<void::Void> for Event<Toggle<dummy::Behaviour>> {
-    fn from(event: void::Void) -> Self {
-        Event::Custom(event)
+impl<B: NetworkBehaviour> From<void::Void> for Event<B> {
+    fn from(_event: void::Void) -> Self {
+        Event::Void
     }
 }

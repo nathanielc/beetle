@@ -12,7 +12,7 @@ use libp2p::{
     dns,
     identity::Keypair,
     noise,
-    swarm::{ConnectionLimits, Executor, NetworkBehaviour, SwarmBuilder},
+    swarm::{Executor, NetworkBehaviour, SwarmBuilder},
     tcp, websocket,
     yamux::{self, WindowUpdateMode},
     PeerId, Swarm, Transport,
@@ -130,14 +130,7 @@ where
     let behaviour =
         NodeBehaviour::new(keypair, config, relay_client, rpc_client, custom_behaviour).await?;
 
-    let limits = ConnectionLimits::default()
-        .with_max_pending_incoming(Some(config.max_conns_pending_in))
-        .with_max_pending_outgoing(Some(config.max_conns_pending_out))
-        .with_max_established_incoming(Some(config.max_conns_in))
-        .with_max_established_outgoing(Some(config.max_conns_out))
-        .with_max_established_per_peer(Some(config.max_conns_per_peer));
     let swarm = SwarmBuilder::with_executor(transport, behaviour, peer_id, Tokio)
-        .connection_limits(limits)
         .notify_handler_buffer_size(config.notify_handler_buffer_size.try_into()?)
         .per_connection_event_buffer_size(config.connection_event_buffer_size)
         .dial_concurrency_factor(config.dial_concurrency_factor.try_into().unwrap())

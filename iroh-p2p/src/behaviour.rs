@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use cid::Cid;
 use iroh_bitswap::{Bitswap, Block, Config as BitswapConfig, Store};
 use iroh_rpc_client::Client;
+use libp2p::connection_limits::{self, ConnectionLimits};
 use libp2p::core::identity::Keypair;
 use libp2p::gossipsub::{self, MessageAuthenticity};
 use libp2p::identify;
@@ -45,6 +46,7 @@ pub(crate) struct NodeBehaviour<B: NetworkBehaviour> {
     dcutr: Toggle<dcutr::Behaviour>,
     pub(crate) gossipsub: Toggle<gossipsub::Behaviour>,
     pub(crate) peer_manager: PeerManager,
+    limits: connection_limits::Behaviour,
 
     custom_behaviour: Toggle<B>,
 }
@@ -213,6 +215,14 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
         }
         .into();
 
+        let limits = connection_limits::Behaviour::new(
+            ConnectionLimits::default()
+                .with_max_established_outgoing(Some(config.max_conns_out))
+                .with_max_established_incoming(Some(config.max_conns_in))
+                .with_max_pending_outgoing(Some(config.max_conns_pending_out))
+                .with_max_pending_incoming(Some(config.max_conns_pending_in))
+                .with_max_established_per_peer(Some(config.max_conns_per_peer)),
+        );
         Ok(NodeBehaviour {
             ping: Ping::default(),
             identify,
@@ -225,6 +235,7 @@ impl<B: NetworkBehaviour> NodeBehaviour<B> {
             relay_client: relay_client.into(),
             gossipsub,
             peer_manager,
+            limits,
             custom_behaviour: custom_behaviour.into(),
         })
     }

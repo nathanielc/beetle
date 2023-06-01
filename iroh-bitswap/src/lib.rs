@@ -423,9 +423,12 @@ impl<S: Store> NetworkBehaviour for Bitswap<S> {
             }
             libp2p::swarm::FromSwarm::DialFailure(event) => {
                 if let Some(peer_id) = event.peer_id {
-                    if let DialError::ConnectionLimit(_) = event.error {
+                    if let DialError::Denied { cause: _ } = event.error {
+                        // TODO check that the denied cause is because of a connection limit.
+                        //if let Ok(connection_limits::Exceeded { .. }) = cause.downcast() {
                         self.pause_dialing = true;
                         self.set_peer_state(&peer_id, PeerState::Disconnected);
+                        //}
                     } else {
                         self.set_peer_state(&peer_id, PeerState::DialFailure(Instant::now()));
                     }

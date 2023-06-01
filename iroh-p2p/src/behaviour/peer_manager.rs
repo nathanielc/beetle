@@ -10,10 +10,9 @@ use libp2p::{
     identify::Info as IdentifyInfo,
     ping::Success as PingSuccess,
     swarm::{dummy, ConnectionId, DialError, NetworkBehaviour, PollParameters},
-    Multiaddr, PeerId,
+    PeerId,
 };
 use lru::LruCache;
-use tracing::debug;
 
 pub struct PeerManager {
     info: AHashMap<PeerId, Info>,
@@ -101,7 +100,8 @@ impl NetworkBehaviour for PeerManager {
             libp2p::swarm::FromSwarm::DialFailure(event) => {
                 if let Some(peer_id) = event.peer_id {
                     match event.error {
-                        DialError::ConnectionLimit(_) | DialError::DialPeerConditionFalse(_) => {}
+                        // TODO check that the denied cause is because of a connection limit.
+                        DialError::Denied { cause: _ } | DialError::DialPeerConditionFalse(_) => {}
                         _ => {
                             if self.bad_peers.put(peer_id, ()).is_none() {
                                 inc!(P2PMetrics::BadPeer);
