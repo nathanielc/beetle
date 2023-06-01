@@ -51,13 +51,8 @@ async fn build_transport(
     let quic_transport = libp2p_quic::tokio::Transport::new(quic_config);
 
     // Noise config for TCP & Websockets
-    let auth_config = {
-        let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(keypair)
-            .expect("Noise key generation failed");
-
-        noise::NoiseConfig::xx(dh_keys).into_authenticated()
-    };
+    let auth_config =
+        noise::Config::new(keypair).expect("should be able to configure noise with keypair");
 
     // Stream muxer config for TCP & Websockets
     let muxer_config = {

@@ -2442,6 +2442,7 @@ dependencies = [
  "iroh-util",
  "keyed_priority_queue",
  "libp2p",
+ "libp2p-identity",
  "multihash",
  "names",
  "num_enum",

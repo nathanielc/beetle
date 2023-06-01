@@ -42,7 +42,7 @@ tokio-stream.workspace = true
 tracing.workspace = true
 unsigned-varint = { workspace = true, features = ["asynchronous_codec"] }
 wasm-timer.workspace = true
-
+libp2p-identity.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

@@ -620,13 +620,12 @@ mod tests {
 
     use anyhow::anyhow;
     use futures::prelude::*;
-    use libp2p::core::muxing::StreamMuxerBox;
     use libp2p::core::transport::upgrade::Version;
     use libp2p::core::transport::Boxed;
-    use libp2p::identity::Keypair;
     use libp2p::swarm::SwarmEvent;
     use libp2p::tcp::{tokio::Transport as TcpTransport, Config as TcpConfig};
     use libp2p::yamux;
+    use libp2p::{core::muxing::StreamMuxerBox, swarm::SwarmBuilder};
     use libp2p::{noise, PeerId, Swarm, Transport};
     use tokio::sync::{mpsc, RwLock};
     use tracing::{info, trace};
@@ -660,15 +659,10 @@ mod tests {
     }
 
     fn mk_transport() -> (PeerId, Boxed<(PeerId, StreamMuxerBox)>) {
-        let local_key = Keypair::generate_ed25519();
+        let local_key = libp2p_identity::Keypair::generate_ed25519();
 
-        let auth_config = {
-            let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-                .into_authentic(&local_key)
-                .expect("Noise key generation failed");
-
-            noise::NoiseConfig::xx(dh_keys).into_authenticated()
-        };
+        let auth_config =
+            noise::Config::new(&local_key).expect("should be able to create noise config");
 
         let peer_id = local_key.public().to_peer_id();
         let transport = TcpTransport::new(TcpConfig::default().nodelay(true))
@@ -761,7 +755,8 @@ mod tests {
         let (peer1_id, trans) = mk_transport();
         let store1 = TestStore::default();
         let bs1 = Bitswap::new(peer1_id, store1.clone(), Config::default()).await;
-        let mut swarm1 = Swarm::with_tokio_executor(trans, bs1, peer1_id);
+
+        let mut swarm1 = SwarmBuilder::with_tokio_executor(trans, bs1, peer1_id).build();
         let blocks = (0..N).map(|_| create_random_block_v1()).collect::<Vec<_>>();
 
         for block in &blocks {
@@ -794,7 +789,7 @@ mod tests {
         let store2 = TestStore::default();
         let bs2 = Bitswap::new(peer2_id, store2.clone(), Config::default()).await;
 
-        let mut swarm2 = Swarm::with_tokio_executor(trans, bs2, peer2_id);
+        let mut swarm2 = SwarmBuilder::with_tokio_executor(trans, bs2, peer2_id).build();
 
         let swarm2_bs = swarm2.behaviour().clone();
         let peer2 = tokio::task::spawn(async move {

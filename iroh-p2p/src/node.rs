@@ -25,7 +25,9 @@ use libp2p::metrics::Recorder;
 use libp2p::multiaddr::Protocol;
 use libp2p::ping::Result as PingResult;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
-use libp2p::swarm::{ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, SwarmEvent};
+#[allow(deprecated)]
+use libp2p::swarm::IntoConnectionHandler;
+use libp2p::swarm::{ConnectionHandler, NetworkBehaviour, SwarmEvent};
 use libp2p::{core::Multiaddr, swarm::AddressScore};
 use libp2p::{PeerId, Swarm};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -420,10 +422,14 @@ where
 
     // TODO fix skip_all
     #[tracing::instrument(skip_all)]
+    // Allow IntoConnectionHandler deprecated associated type.
+    // We are not using IntoConnectionHandler directly only referencing the type as part of this event signature.
+    #[allow(deprecated)]
     fn handle_swarm_event(
         &mut self,
         event: SwarmEvent<
             <NodeBehaviour<B> as NetworkBehaviour>::OutEvent,
+
             <<<NodeBehaviour <B>as NetworkBehaviour>::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::Error>,
     ) -> Result<()> {
         libp2p_metrics().record(&event);

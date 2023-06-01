@@ -90,6 +90,7 @@ keyed_priority_queue = "0.4.1"
 lazy_static = "1.4"
 libipld = "0.15"
 libp2p = { version = "0.51", default-features = false }
+libp2p-identity = { version = "0.1.2", features = ["ed25519"] }
 lru = "0.8"
 mime = "0.3"
 mime_classifier = "0.0.1"

@@ -54,6 +54,7 @@ impl From<Keypair> for libp2p::identity::Keypair {
                 let mut bytes = kp.to_bytes();
                 let kp = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut bytes)
                     .expect("invalid encoding");
+                #[allow(deprecated)]
                 libp2p::identity::Keypair::Ed25519(kp)
             }
         }
