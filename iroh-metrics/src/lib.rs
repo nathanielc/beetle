@@ -39,7 +39,7 @@ use prometheus_client::registry::Registry;
 use std::env::consts::{ARCH, OS};
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use tracing::log::{debug, warn};
+use tracing::{debug, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
